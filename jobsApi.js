@@ -73,13 +73,30 @@ async function fetchECVIMCAJobs() {
   return jobs;
 }
 
+// --- Helper: Short summary for ECVN description (max 25 words) ---
+function summarize(text, maxWords = 25) {
+  // Remove newlines and excess whitespace
+  let clean = text.replace(/\s+/g, ' ').trim();
+  // Take up to the first period, if that's at least 10 characters
+  let summary = clean.split('. ')[0];
+  if (!summary || summary.length < 10) {
+    // Fallback: take first N words
+    summary = clean.split(' ').slice(0, maxWords).join(' ');
+    if (clean.split(' ').length > maxWords) summary += '...';
+  }
+  // Also don't let summary exceed N words even if there is a period
+  if (summary.split(' ').length > maxWords) {
+    summary = summary.split(' ').slice(0, maxWords).join(' ') + '...';
+  }
+  return summary;
+}
+
 // --- ECVN Small Animal Neurology Residency Jobs ---
 async function fetchECVNJobs() {
   const { data } = await axios.get('https://www.ecvn.org/general-information/open-residency-position');
   const $ = cheerio.load(data);
   const jobs = [];
 
-  // More robust selector
   $('div[class*="paragraph--type--minimal-call-to-action"]').each((i, el) => {
     // 1. Text/HTML content
     const fieldItem = $(el).find('.field--name-field-minimal-cta-text .field--item');
@@ -93,8 +110,9 @@ async function fetchECVNJobs() {
       title = text.split('.')[0].trim();
     }
 
-    // 3. Description: All text content (could be truncated if you wish)
-    const description = fieldItem.text().trim();
+    // 3. Description: summarized (max 25 words)
+    const fullDescription = fieldItem.text().trim();
+    const description = summarize(fullDescription, 25);
 
     // 4. URL: "FIND OUT MORE" or external link
     let url = $(el).find('.field--name-field-minimal-cta-link a').attr('href');
@@ -109,13 +127,13 @@ async function fetchECVNJobs() {
       organisation = $(strongs[1]).text().replace(/\u00a0/g, ' ').trim();
     } else {
       // Try to match 'Institution: ...'
-      const orgMatch = description.match(/Institution:\s*([^\n]+)/i);
+      const orgMatch = fullDescription.match(/Institution:\s*([^\n]+)/i);
       if (orgMatch) organisation = orgMatch[1].trim();
     }
 
     // 6. Date: "Closing date" or "deadline"
     let date = null;
-    const dateMatch = description.match(/(Closing date|deadline).*?[:\-]?\s*([0-9]{1,2}(?:st|nd|rd|th)?\s+\w+\s*\d{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4}|[0-9]{1,2}\.\d{1,2}\.\d{2,4})/i);
+    const dateMatch = fullDescription.match(/(Closing date|deadline).*?[:\-]?\s*([0-9]{1,2}(?:st|nd|rd|th)?\s+\w+\s*\d{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4}|[0-9]{1,2}\.\d{1,2}\.\d{2,4})/i);
     if (dateMatch) date = dateMatch[2];
 
     // 7. Country: Try ", XX" from title or org
@@ -146,7 +164,6 @@ async function fetchECVNJobs() {
 
   return jobs;
 }
-
 
 // --- In-memory cache (all job sources) ---
 let cache = {

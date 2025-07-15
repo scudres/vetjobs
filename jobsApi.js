@@ -79,48 +79,56 @@ async function fetchECVNJobs() {
   const $ = cheerio.load(data);
   const jobs = [];
 
-  $('.paragraph--type--minimal-call-to-action').each((i, el) => {
-    // Main job text content
+  // More robust selector
+  $('div[class*="paragraph--type--minimal-call-to-action"]').each((i, el) => {
+    // 1. Text/HTML content
     const fieldItem = $(el).find('.field--name-field-minimal-cta-text .field--item');
     const rawHtml = fieldItem.html() || '';
-    const text = fieldItem.text().trim();
+    const text = fieldItem.text().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 
-    // Title: first <strong>
+    // 2. Title: The first <strong> tag, or the first line
     let title = $(fieldItem).find('strong').first().text().replace(/\u00a0/g, ' ').trim();
-    if (!title) title = text.split('\n')[0];
+    if (!title) {
+      // Fallback: use first line
+      title = text.split('.')[0].trim();
+    }
 
-    // Description: the full job ad text
-    let description = text;
+    // 3. Description: All text content (could be truncated if you wish)
+    const description = fieldItem.text().trim();
 
-    // URL (external link)
+    // 4. URL: "FIND OUT MORE" or external link
     let url = $(el).find('.field--name-field-minimal-cta-link a').attr('href');
     if (url && !/^http/.test(url)) {
       url = 'https://www.ecvn.org' + url;
     }
 
-    // Organisation: try 2nd <strong> or first sentence after title
+    // 5. Organisation: Try second <strong> or 'Institution: ...'
     let organisation = null;
     const strongs = $(fieldItem).find('strong');
     if (strongs.length > 1) {
       organisation = $(strongs[1]).text().replace(/\u00a0/g, ' ').trim();
     } else {
-      organisation = description.split('\n')[1] || null;
+      // Try to match 'Institution: ...'
+      const orgMatch = description.match(/Institution:\s*([^\n]+)/i);
+      if (orgMatch) organisation = orgMatch[1].trim();
     }
 
-    // Date: try "Closing date" line
+    // 6. Date: "Closing date" or "deadline"
     let date = null;
-    const dateMatch = description.match(/Closing date.*?[:\-]?\s*([0-9]{1,2}[a-z]{2,3}\s+\w+|[0-9]{1,2}(st|nd|rd|th)?\s+\w+\s*[0-9]{2,4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4}|[0-9]{1,2}\.\d{1,2}\.\d{2,4}|[0-9]{1,2}(st|nd|rd|th)?\.\s*\w+\s*[0-9]{2,4})/i);
-    if (dateMatch) date = dateMatch[1];
+    const dateMatch = description.match(/(Closing date|deadline).*?[:\-]?\s*([0-9]{1,2}(?:st|nd|rd|th)?\s+\w+\s*\d{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4}|[0-9]{1,2}\.\d{1,2}\.\d{2,4})/i);
+    if (dateMatch) date = dateMatch[2];
 
-    // Country: try to extract from title
+    // 7. Country: Try ", XX" from title or org
     let country = null;
-    const countryMatch = title.match(/, ([A-Z]{2,})/i);
+    const countryMatch = title.match(/, ([A-Z]{2,})/i) || (organisation && organisation.match(/, ([A-Z]{2,})/i));
     if (countryMatch) country = countryMatch[1];
 
+    // All are small animal neurology residencies
     const species = "small animal";
     const type = "residency";
     const source = "ecvn";
 
+    // Only if title and url exist
     if (title && url) {
       jobs.push({
         title,
@@ -138,6 +146,7 @@ async function fetchECVNJobs() {
 
   return jobs;
 }
+
 
 // --- In-memory cache (all job sources) ---
 let cache = {

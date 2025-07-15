@@ -7,14 +7,13 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 app.use(cors());
 
-// --- Scraper functions for each source ---
+// --- ECEIM Equine Jobs ---
 async function fetchECEIMEquineJobs() {
   const { data } = await axios.get('https://www.eceim.info/jobs');
   const $ = cheerio.load(data);
   const jobs = [];
 
   $('.view-jobs .views-row').each((i, el) => {
-    // Extract title and description from <p> in .views-field-body
     const title = $(el).find('.views-field-body p').text().trim();
     const description = title; // No other description, so use the same
     const url = 'https://www.eceim.info' + $(el).find('.views-field-view-node a').attr('href');
@@ -29,6 +28,44 @@ async function fetchECEIMEquineJobs() {
       date,
       species: "equine",
       source: "eceim"
+    });
+  });
+
+  return jobs;
+}
+
+// --- ECVIM-CA Small Animal Jobs ---
+async function fetchECVIMCAJobs() {
+  const { data } = await axios.get('https://ecvim-ca.college/residency-vacancies/');
+  const $ = cheerio.load(data);
+  const jobs = [];
+
+  $('.elementor-widget-image-box').each((i, el) => {
+    const title = $(el).find('.elementor-image-box-title').text().trim();
+    const description = $(el).find('.elementor-image-box-description').text().trim();
+    const url = $(el).find('.elementor-image-box-title a').attr('href');
+    const organisation = $(el).find('.elementor-image-box-img img').attr('alt') || null;
+
+    // Try to extract country from title (e.g. ", UK")
+    let country = null;
+    const countryMatch = title.match(/, ([A-Za-z ]{2,})$/i);
+    if (countryMatch) country = countryMatch[1].trim();
+
+    // All ECVIM-CA positions are usually small animal, adjust as needed
+    const species = "small animal";
+
+    // No explicit date on this site
+    const date = null;
+
+    jobs.push({
+      title,
+      organisation,
+      description,
+      url,
+      country,
+      date,
+      species,
+      source: "ecvim-ca"
     });
   });
 
@@ -55,13 +92,12 @@ app.get('/api/jobs', async (req, res) => {
   }
 
   try {
-    let allJobs = [];
-
-    // Add ECEIM jobs (equine)
-    const eceimJobs = await fetchECEIMEquineJobs();
-    allJobs = allJobs.concat(eceimJobs);
-
-    // Future: add other sources here (e.g., small animal, exotics)
+    // Fetch both sources in parallel
+    const [eceimJobs, ecvimcaJobs] = await Promise.all([
+      fetchECEIMEquineJobs(),
+      fetchECVIMCAJobs()
+    ]);
+    let allJobs = [].concat(eceimJobs, ecvimcaJobs);
 
     // Optional: allow query filtering by species
     const { species } = req.query;

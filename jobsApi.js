@@ -14,17 +14,18 @@ async function fetchECEIMEquineJobs() {
   const jobs = [];
 
   $('.view-jobs .views-row').each((i, el) => {
-    const title = $(el).find('a').first().text().trim();
-    const url = 'https://www.eceim.info' + $(el).find('a').attr('href');
-    const description = $(el).find('.views-field-body').text().trim();
-    const date = $(el).find('.date-display-single').text().trim();
+    // Extract title and description from <p> in .views-field-body
+    const title = $(el).find('.views-field-body p').text().trim();
+    const description = title; // No other description, so use the same
+    const url = 'https://www.eceim.info' + $(el).find('.views-field-view-node a').attr('href');
+    const date = $(el).find('.views-field-created time').text().trim();
 
     jobs.push({
       title,
-      organisation: null, // Can be improved later
+      organisation: null,
       description,
       url,
-      country: null, // Can be improved later
+      country: null,
       date,
       species: "equine",
       source: "eceim"
@@ -46,7 +47,6 @@ app.get('/api/jobs', async (req, res) => {
   const now = Date.now();
   // Use cache if not expired
   if (cache.jobs.length && (now - cache.timestamp) < CACHE_DURATION) {
-    // Optional: allow query filtering
     const { species } = req.query;
     if (species) {
       return res.json(cache.jobs.filter(j => j.species === species));

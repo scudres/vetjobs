@@ -1,28 +1,37 @@
 {
-  "name": "eceim-jobs-api",
+  "name": "vetjobs-api",
   "version": "1.0.0",
-  "description": "API for scraping and serving ECEIM equine medicine jobs listings.",
-  "main": "eceimJobsScraper.js",
+  "description": "API for scraping and serving veterinary jobs, internships, and residencies listings.",
+  "main": "app.js",
   "scripts": {
-    "start": "node eceimJobsScraper.js"
+    "start": "node app.js"
   },
   "dependencies": {
-    "axios": "^1.6.8",
-    "cheerio": "^1.0.0-rc.12",
+    "axios": "^1.10.0",
+    "cheerio": "^1.1.0",
     "cors": "^2.8.5",
-    "express": "^4.18.2"
+    "express": "^4.21.2"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "keywords": [
-    "eceim",
+    "veterinary",
     "jobs",
+    "internships",
+    "residencies",
     "api",
-    "equine",
-    "medicine",
     "scraper"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scudres/vetjobs.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/scudres/vetjobs/issues"
+  },
+  "homepage": "https://github.com/scudres/vetjobs#readme"
 }

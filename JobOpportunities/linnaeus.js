@@ -1,24 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-
-// Geocode function using OpenStreetMap Nominatim
-async function geocodeCity(city, country) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city + ', ' + country)}`;
-  try {
-    const { data } = await axios.get(url, {
-      headers: { 'User-Agent': 'VetNextStepJobScraper/1.0 (your-email@example.com)' }
-    });
-    if (data && data.length > 0) {
-      return {
-        lat: parseFloat(data[0].lat),
-        lon: parseFloat(data[0].lon)
-      };
-    }
-  } catch (err) {
-    // ignore geocode failures, return nothing
-  }
-  return { lat: null, lon: null };
-}
+const geocodeLocation = require('../utils/geocode'); // Make sure this util exists as discussed
 
 async function fetchLinnaeusJobs() {
   const baseUrl = 'https://www.linnaeusgroup.co.uk/careers/vacancies';
@@ -33,7 +15,9 @@ async function fetchLinnaeusJobs() {
 
   while (hasNext) {
     try {
-      const { data } = await axios.get(getPageUrl(page));
+      const { data } = await axios.get(getPageUrl(page), {
+        headers: { 'User-Agent': 'VetNextStepJobScraper/1.0 (your-email@example.com)' }
+      });
       const $ = cheerio.load(data);
 
       let jobsOnPage = 0;
@@ -55,15 +39,27 @@ async function fetchLinnaeusJobs() {
         const imgTag = $(el).find('img');
         const logo = imgTag.length ? "https://www.linnaeusgroup.co.uk" + imgTag.attr('src') : null;
 
-        // ---- NEW: Extract city and country ----
+        // ---- Extract city and country ----
         let city = "";
         let country = "United Kingdom";
         if (location) {
-          city = location.split(',')[0].trim();
+          // For best precision, try to get the last part after the last comma as city, e.g. "London, SE1 4LS"
+          const locParts = location.split(',');
+          city = locParts[0].trim();
         }
 
-        // ---- NEW: Get lat/lon for city, country ----
-        const { lat, lon } = await geocodeCity(city, country);
+        // ---- Get lat/lon for city, country ----
+        let latitude = null;
+        let longitude = null;
+        try {
+          const geo = await geocodeLocation(city, country);
+          if (geo) {
+            latitude = geo.latitude;
+            longitude = geo.longitude;
+          }
+        } catch (e) {
+          // ignore, leave lat/lon null
+        }
 
         jobs.push({
           title,
@@ -73,8 +69,8 @@ async function fetchLinnaeusJobs() {
           location,
           city,
           country,
-          lat,        // <---- add these!
-          lon,        // <---- add these!
+          latitude,    // always output as 'latitude'
+          longitude,   // always output as 'longitude'
           hours,
           practice,
           logo,

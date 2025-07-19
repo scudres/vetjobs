@@ -1,7 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // Make sure this util exists as discussed
-const guessCity = require('./guessCity');
+const guessCity = require('../utils/cityGuess');
 
 async function fetchLinnaeusJobs() {
   const baseUrl = 'https://www.linnaeusgroup.co.uk/careers/vacancies';

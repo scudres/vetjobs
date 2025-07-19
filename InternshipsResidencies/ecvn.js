@@ -1,7 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // path may need adjusting
-const guessCity = require('./guessCity'); // path may need adjusting
+const guessCity = require('../utils/cityGuess');
 
 // Helper function for summarizing text
 function summarize(text, maxWords = 25) {

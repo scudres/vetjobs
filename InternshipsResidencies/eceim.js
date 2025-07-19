@@ -1,7 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // adjust path if needed
-const guessCity = require('./guessCity'); // adjust path if needed
+const guessCity = require('../utils/cityGuess');
 
 async function fetchECEIMEquineJobs() {
   const { data } = await axios.get('https://www.eceim.info/jobs');

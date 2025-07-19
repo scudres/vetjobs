@@ -1,7 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // Adjust path if needed
-const guessCity = require('./guessCity'); // Adjust path if needed
+const guessCity = require('../utils/cityGuess');
 
 async function fetchECVIMCAJobs() {
   const { data } = await axios.get('https://ecvim-ca.college/residency-vacancies/');

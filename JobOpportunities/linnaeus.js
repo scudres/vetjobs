@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // Make sure this util exists as discussed
+const guessCity = require('./guessCity');
 
 async function fetchLinnaeusJobs() {
   const baseUrl = 'https://www.linnaeusgroup.co.uk/careers/vacancies';
@@ -43,22 +44,26 @@ async function fetchLinnaeusJobs() {
         let city = "";
         let country = "United Kingdom";
         if (location) {
-          // For best precision, try to get the last part after the last comma as city, e.g. "London, SE1 4LS"
-          const locParts = location.split(',');
-          city = locParts[0].trim();
+          // Use guessCity for address help, fallback to first comma group
+          city = guessCity(location) || location.split(',')[0].trim();
         }
 
         // ---- Get lat/lon for city, country ----
         let latitude = null;
         let longitude = null;
         try {
-          const geo = await geocodeLocation(city, country);
+          // Prefer city+country geocoding, fallback to just country
+          let geo = null;
+          if (city && country) geo = await geocodeLocation(city, country);
+          if ((!geo || !geo.latitude || !geo.longitude) && country) {
+            geo = await geocodeLocation(null, country);
+          }
           if (geo) {
             latitude = geo.latitude;
             longitude = geo.longitude;
           }
         } catch (e) {
-          // ignore, leave lat/lon null
+          // ignore geocode error
         }
 
         jobs.push({
@@ -69,8 +74,8 @@ async function fetchLinnaeusJobs() {
           location,
           city,
           country,
-          latitude,    // always output as 'latitude'
-          longitude,   // always output as 'longitude'
+          latitude,
+          longitude,
           hours,
           practice,
           logo,

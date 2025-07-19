@@ -1,12 +1,12 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // adjust path if needed
+const guessCity = require('./guessCity'); // adjust path if needed
 
 async function fetchECEIMEquineJobs() {
   const { data } = await axios.get('https://www.eceim.info/jobs');
   const $ = cheerio.load(data);
 
-  // Gather all elements to use Promise.all for async geocoding
   const elements = $('.view-jobs .views-row').toArray();
 
   const jobs = await Promise.all(
@@ -16,26 +16,45 @@ async function fetchECEIMEquineJobs() {
       const url = 'https://www.eceim.info' + $(el).find('.views-field-view-node a').attr('href');
       const date = $(el).find('.views-field-created time').text().trim();
 
-      // Try to extract city and country from title, format: "Residency in Equine Internal Medicine – Bern, Switzerland"
-      let country = null;
-      let city = null;
+      // 1. Try to extract city/country from the title
+      let city = null, country = null;
 
-      // Try to find patterns like: "— City, Country" or "- City, Country"
+      // e.g., "Residency in Equine Internal Medicine – Bern, Switzerland"
       const locMatch = title.match(/[–-]\s*([\w\s'.-]+?),\s*([A-Za-zÀ-ÿ .'-]+)/);
       if (locMatch) {
         city = locMatch[1].trim();
         country = locMatch[2].trim();
-      }
-
-      // If not found, fallback to null
-      // If only country in title, catch it
-      if (!country) {
+      } else {
+        // Try: ", Country" only
         const countryMatch = title.match(/,\s*([A-Za-zÀ-ÿ .'-]{2,})$/);
         if (countryMatch) country = countryMatch[1].trim();
       }
 
-      // Geocode (city + country)
-      const geo = await geocodeLocation(city, country);
+      // 2. Fallback: use guessCity if city is still missing
+      if (!city) {
+        city = guessCity(title) || null;
+      }
+
+      // 3. Default country to "Europe" if not otherwise set (you may want to improve this logic)
+      if (!country) country = "Europe";
+
+      // 4. Geocode (city, country)
+      let latitude, longitude;
+      if (city && country) {
+        const geo = await geocodeLocation(city, country);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
+      // fallback: try geocoding just the country
+      if ((!latitude || !longitude) && country) {
+        const geo = await geocodeLocation(null, country);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
 
       return {
         title,
@@ -48,8 +67,8 @@ async function fetchECEIMEquineJobs() {
         species: "equine",
         type: "residency",
         source: "eceim",
-        latitude: geo ? geo.latitude : undefined,
-        longitude: geo ? geo.longitude : undefined
+        latitude,
+        longitude,
       };
     })
   );

@@ -1,15 +1,15 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const geocodeLocation = require('../utils/geocode'); // Adjust path as needed
+const geocodeLocation = require('../utils/geocode'); // Adjust path if needed
+const guessCity = require('./guessCity'); // Adjust path if needed
 
 async function fetchECVIMCAJobs() {
   const { data } = await axios.get('https://ecvim-ca.college/residency-vacancies/');
   const $ = cheerio.load(data);
 
-  // Grab all job boxes as elements array for async handling
+  // Get all job elements for async geocoding
   const elements = $('.elementor-widget-image-box').toArray();
 
-  // Map and await geocoding for each job
   const jobs = await Promise.all(
     elements.map(async (el) => {
       const title = $(el).find('.elementor-image-box-title').text().trim();
@@ -17,23 +17,46 @@ async function fetchECVIMCAJobs() {
       const url = $(el).find('.elementor-image-box-title a').attr('href');
       const organisation = $(el).find('.elementor-image-box-img img').attr('alt') || null;
 
-      // Extract country from title (e.g. "Alfort, France")
-      let country = null;
-      let city = null;
-      const countryMatch = title.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
-      if (countryMatch) country = countryMatch[1].trim();
+      // Try to extract city and country: "Alfort, France"
+      let city = null, country = null;
 
-      // Try to extract city if available ("Alfort, France" => city = "Alfort")
-      const cityMatch = title.match(/^(.+?),/);
-      if (cityMatch) city = cityMatch[1].trim();
+      const cityCountryMatch = title.match(/^(.+?),\s*([A-Za-zÀ-ÿ .'-]{2,})$/);
+      if (cityCountryMatch) {
+        city = cityCountryMatch[1].trim();
+        country = cityCountryMatch[2].trim();
+      } else {
+        // If not full pattern, try for just ", Country"
+        const countryMatch = title.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
+        if (countryMatch) country = countryMatch[1].trim();
 
-      const species = "small animal";
-      const type = "residency";
-      const source = "ecvim-ca";
-      const date = null;
+        // Try to guess city if not found
+        if (!city) city = guessCity(title) || null;
+      }
 
-      // --- Geocode the city+country (falls back to country if city not found) ---
-      const geo = await geocodeLocation(city, country);
+      // If still no country, try organisation or fallback
+      if (!country && organisation) {
+        // If org has a country in the name, try to extract
+        const orgCountryMatch = organisation.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
+        if (orgCountryMatch) country = orgCountryMatch[1].trim();
+      }
+      if (!country) country = "Europe"; // fallback
+
+      // Geocode (city + country), fallback to country only
+      let latitude, longitude;
+      if (city && country) {
+        const geo = await geocodeLocation(city, country);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
+      if ((!latitude || !longitude) && country) {
+        const geo = await geocodeLocation(null, country);
+        if (geo) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        }
+      }
 
       return {
         title,
@@ -42,12 +65,12 @@ async function fetchECVIMCAJobs() {
         url,
         country,
         city,
-        date,
-        species,
-        type,
-        source,
-        latitude: geo ? geo.latitude : undefined,
-        longitude: geo ? geo.longitude : undefined
+        date: null,
+        species: "small animal",
+        type: "residency",
+        source: "ecvim-ca",
+        latitude,
+        longitude
       };
     })
   );

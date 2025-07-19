@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const geocodeLocation = require('../utils/geocode'); // path may need adjusting
 const guessCity = require('../utils/cityGuess');
 
-// Helper function for summarizing text
+// Helper for description summary
 function summarize(text, maxWords = 25) {
   let clean = text.replace(/\s+/g, ' ').trim();
   let summary = clean.split('. ')[0];
@@ -26,7 +26,6 @@ async function fetchECVNJobs() {
   const jobs = await Promise.all(
     elements.map(async (el) => {
       const fieldItem = $(el).find('.field--name-field-minimal-cta-text .field--item');
-      const rawHtml = fieldItem.html() || '';
       const text = fieldItem.text().replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 
       let title = $(fieldItem).find('strong').first().text().replace(/\u00a0/g, ' ').trim();
@@ -38,25 +37,30 @@ async function fetchECVNJobs() {
       let url = $(el).find('.field--name-field-minimal-cta-link a').attr('href');
       if (url && !/^http/.test(url)) url = 'https://www.ecvn.org' + url;
 
-      // Organisation extraction (try strong tag, or fallback to "Institution: ...")
+      // --- Organisation: Try strong[1], else Institution, else fallback ---
       let organisation = null;
       const strongs = $(fieldItem).find('strong');
       if (strongs.length > 1) {
         organisation = $(strongs[1]).text().replace(/\u00a0/g, ' ').trim();
-      } else {
+      }
+      if (!organisation) {
         const orgMatch = fullDescription.match(/Institution:\s*([^\n]+)/i);
         if (orgMatch) organisation = orgMatch[1].trim();
       }
+      if (!organisation) {
+        // Try fallback from description
+        const orgMatch = fullDescription.match(/at ([A-Za-zÀ-ÿ .'-]+)/i);
+        if (orgMatch) organisation = orgMatch[1].trim();
+      }
 
-      // Date extraction (various patterns)
+      // --- Date extraction ---
       let date = null;
       const dateMatch = fullDescription.match(/(Closing date|deadline).*?[:\-]?\s*([0-9]{1,2}(?:st|nd|rd|th)?\s+\w+\s*\d{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{2,4}|[0-9]{1,2}\.\d{1,2}\.\d{2,4})/i);
       if (dateMatch) date = dateMatch[2];
 
       // --- City & Country extraction ---
       let city = null, country = null;
-
-      // Look for "City, Country" in title or organisation
+      // Try: "City, Country" in title or org
       let locMatch = title.match(/([A-Za-zÀ-ÿ .'-]+),\s*([A-Za-zÀ-ÿ .'-]+)/);
       if (!locMatch && organisation) {
         locMatch = organisation.match(/([A-Za-zÀ-ÿ .'-]+),\s*([A-Za-zÀ-ÿ .'-]+)/);
@@ -72,7 +76,7 @@ async function fetchECVNJobs() {
       if (!city) city = guessCity(title + ' ' + (organisation || '')) || null;
       if (!country) country = "Europe"; // fallback
 
-      // Geocode if we have city and/or country
+      // --- Geocode if we have city and/or country ---
       let latitude, longitude;
       if (city && country) {
         const geo = await geocodeLocation(city, country);

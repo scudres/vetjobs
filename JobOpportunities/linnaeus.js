@@ -23,7 +23,6 @@ async function fetchLinnaeusJobs() {
 
       let jobsOnPage = 0;
 
-      // Use for...of to allow await in loop
       const vacancies = $('li.vacancy').toArray();
       for (const el of vacancies) {
         const titleTag = $(el).find('a.title');
@@ -44,15 +43,15 @@ async function fetchLinnaeusJobs() {
         let city = "";
         let country = "United Kingdom";
         if (location) {
-          // Use guessCity for address help, fallback to first comma group
           city = guessCity(location) || location.split(',')[0].trim();
         }
 
-        // ---- Get lat/lon for city, country ----
-        let latitude = null;
-        let longitude = null;
+        // ---- Get organisation field, fallback to practice or "Linnaeus Group"
+        let organisation = practice || "Linnaeus Group";
+
+        // ---- Geocode (city, country) ----
+        let latitude = null, longitude = null;
         try {
-          // Prefer city+country geocoding, fallback to just country
           let geo = null;
           if (city && country) geo = await geocodeLocation(city, country);
           if ((!geo || !geo.latitude || !geo.longitude) && country) {
@@ -68,20 +67,16 @@ async function fetchLinnaeusJobs() {
 
         jobs.push({
           title,
-          organisation: practice,
-          description: `${title} at ${practice}, ${location} (${hours})`,
+          organisation,
+          description: `${title} at ${organisation}, ${location} (${hours})`,
           url,
-          location,
-          city,
           country,
+          city,
           latitude,
           longitude,
-          hours,
-          practice,
-          logo,
           date: null,
-          type: "job",
           species: "small animal",
+          type: "job",
           source: "linnaeus"
         });
         jobsOnPage++;

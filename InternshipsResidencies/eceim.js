@@ -11,34 +11,58 @@ async function fetchECEIMEquineJobs() {
 
   const jobs = await Promise.all(
     elements.map(async (el) => {
+      // 1. Title and description
       const title = $(el).find('.views-field-body p').text().trim();
       const description = title;
+
+      // 2. Try to get organisation if present
+      let organisation = null;
+      // Try: find org name in the "Organisation" field, or look for clues in job card
+      // This selector is a guess, update as needed for real HTML!
+      organisation =
+        $(el).find('.views-field-field-organisation').text().trim() ||
+        $(el).find('.views-field-organisation').text().trim() ||
+        null;
+
+      // Fallback: try to parse from title or description, e.g. "...at EnvA, France"
+      if (!organisation) {
+        const orgMatch = title.match(/at ([A-Za-zÀ-ÿ .'-]+)/i);
+        if (orgMatch) organisation = orgMatch[1].trim();
+      }
+
+      // 3. URL & Date
       const url = 'https://www.eceim.info' + $(el).find('.views-field-view-node a').attr('href');
       const date = $(el).find('.views-field-created time').text().trim();
 
-      // 1. Try to extract city/country from the title
+      // 4. Try to extract city/country from the title
       let city = null, country = null;
-
-      // e.g., "Residency in Equine Internal Medicine – Bern, Switzerland"
       const locMatch = title.match(/[–-]\s*([\w\s'.-]+?),\s*([A-Za-zÀ-ÿ .'-]+)/);
       if (locMatch) {
         city = locMatch[1].trim();
         country = locMatch[2].trim();
       } else {
-        // Try: ", Country" only
         const countryMatch = title.match(/,\s*([A-Za-zÀ-ÿ .'-]{2,})$/);
         if (countryMatch) country = countryMatch[1].trim();
       }
 
-      // 2. Fallback: use guessCity if city is still missing
+      // Fallback: use guessCity if city is still missing
       if (!city) {
         city = guessCity(title) || null;
       }
 
-      // 3. Default country to "Europe" if not otherwise set (you may want to improve this logic)
+      // Fallback: if organisation contains a location, try to extract city/country from that
+      if (!city && organisation) {
+        const orgLoc = organisation.match(/([A-Za-zÀ-ÿ .'-]+),\s*([A-Za-zÀ-ÿ .'-]+)/);
+        if (orgLoc) {
+          city = orgLoc[1].trim();
+          country = orgLoc[2].trim();
+        }
+      }
+
+      // Default country if not otherwise set
       if (!country) country = "Europe";
 
-      // 4. Geocode (city, country)
+      // 5. Geocode (city, country)
       let latitude, longitude;
       if (city && country) {
         const geo = await geocodeLocation(city, country);
@@ -47,7 +71,6 @@ async function fetchECEIMEquineJobs() {
           longitude = geo.longitude;
         }
       }
-      // fallback: try geocoding just the country
       if ((!latitude || !longitude) && country) {
         const geo = await geocodeLocation(null, country);
         if (geo) {
@@ -56,9 +79,12 @@ async function fetchECEIMEquineJobs() {
         }
       }
 
+      // Debug
+      // console.log({ title, organisation, city, country, latitude, longitude });
+
       return {
         title,
-        organisation: null,
+        organisation,
         description,
         url,
         country,

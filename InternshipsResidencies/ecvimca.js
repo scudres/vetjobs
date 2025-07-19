@@ -15,33 +15,45 @@ async function fetchECVIMCAJobs() {
       const title = $(el).find('.elementor-image-box-title').text().trim();
       const description = $(el).find('.elementor-image-box-description').text().trim();
       const url = $(el).find('.elementor-image-box-title a').attr('href');
-      const organisation = $(el).find('.elementor-image-box-img img').attr('alt') || null;
 
-      // Try to extract city and country: "Alfort, France"
+      // 1. Try to get organisation from the image alt tag, fallback to first part of title, then to description
+      let organisation = $(el).find('.elementor-image-box-img img').attr('alt')?.trim() || null;
+      if (!organisation && title) {
+        // Fallback: before first comma in title, if pattern is "Organisation, City, Country"
+        const orgMatch = title.match(/^([^-–,]+?)(?:,|–|-)/);
+        if (orgMatch) organisation = orgMatch[1].trim();
+      }
+      if (!organisation && description) {
+        const orgMatch = description.match(/(?:at|by|hosted by)\s+([A-Za-zÀ-ÿ .'-]+)/i);
+        if (orgMatch) organisation = orgMatch[1].trim();
+      }
+
+      // 2. Try to extract city and country: "Alfort, France"
       let city = null, country = null;
-
       const cityCountryMatch = title.match(/^(.+?),\s*([A-Za-zÀ-ÿ .'-]{2,})$/);
       if (cityCountryMatch) {
         city = cityCountryMatch[1].trim();
         country = cityCountryMatch[2].trim();
       } else {
-        // If not full pattern, try for just ", Country"
+        // Fallback to just ", Country"
         const countryMatch = title.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
         if (countryMatch) country = countryMatch[1].trim();
-
         // Try to guess city if not found
         if (!city) city = guessCity(title) || null;
       }
 
-      // If still no country, try organisation or fallback
+      // 3. If still no country, try organisation or description
       if (!country && organisation) {
-        // If org has a country in the name, try to extract
         const orgCountryMatch = organisation.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
         if (orgCountryMatch) country = orgCountryMatch[1].trim();
       }
+      if (!country && description) {
+        const descCountryMatch = description.match(/, ([A-Za-zÀ-ÿ .'-]{2,})$/i);
+        if (descCountryMatch) country = descCountryMatch[1].trim();
+      }
       if (!country) country = "Europe"; // fallback
 
-      // Geocode (city + country), fallback to country only
+      // 4. Geocode (city + country), fallback to country only
       let latitude, longitude;
       if (city && country) {
         const geo = await geocodeLocation(city, country);
